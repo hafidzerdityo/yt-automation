@@ -240,24 +240,49 @@ kompastv"""
             each_data.update({"caption": '-'})
 
         try:
-            video_response = youtube.commentThreads().list(part='snippet,replies',videoId=re.findall(r'(?<=watch\?v\=).+', link)[0]).execute()
-            video_comment = []
-            comment_dict = {
-                "authorDisplayName": '',
-                "authorChannelUrl": '',
-                "authorProfileImageUrl": '',
-                "textOriginal": '',
-                "likeCount": ''
-            }
-            for i in video_response['items']:
-                ds = i['snippet']['topLevelComment']['snippet']
-                for com_key in comment_dict.keys():
-                    comment_dict[com_key] = ds[com_key]
-                video_comment.append(comment_dict.copy())
-            each_data.update({"video_comment": video_comment})
+            def get_video_comments(**kwargs):
+                comments = []
+                results = youtube.commentThreads().list(**kwargs).execute()
+                comment_dict = {
+                    "authorDisplayName": '',
+                    "authorChannelUrl": '',
+                    "authorProfileImageUrl": '',
+                    "textOriginal": '',
+                    "likeCount": '',
+                    "replies" : ''
+                }
+                while results:
+                    for item in results['items']:
+                        ds = item['snippet']['topLevelComment']['snippet']
+                        for com_key in comment_dict.keys():
+                            if com_key != 'replies':
+                                comment_dict[com_key] = ds[com_key]
+                            else:
+                                try:
+                                    comment_dict['replies'] = item['replies']['comments']
+                                except:
+                                    comment_dict['replies'] = []
+                        comments.append(comment_dict.copy())
+                    # Check if another page exists
+                    if 'nextPageToken' in results:
+                        kwargs['pageToken'] = results['nextPageToken']
+                        results = youtube.commentThreads().list(**kwargs).execute()
+                    else:
+                        break
+                return comments
+            
+            get_all_comment = get_video_comments(part='snippet,replies',videoId=re.findall(r'(?<=watch\?v\=).+', link)[0])
+            each_data.update({"video_comment": get_all_comment})      
+            
         except Exception as e:
             print(e)
-            each_data.update({"video_comment": '-'})
+            dict_comment_kosong = {'authorDisplayName': '',
+            'authorChannelUrl': '',
+            'authorProfileImageUrl': '',
+            'textOriginal': '',
+            'likeCount': 0,
+            'replies': []}
+            each_data.update({"video_comment": [dict_comment_kosong]})
 
         each_data.update({"channel_name": ch})
 
@@ -349,7 +374,8 @@ kompastv"""
 import schedule
 import time
 
-schedule.every().day.at("23:59").do(crawling_harian)
+schedule.every().day.at("14:42").do(crawling_harian)
+print('======Local youtube scraping Started!======')
 
 while True:
     schedule.run_pending()
